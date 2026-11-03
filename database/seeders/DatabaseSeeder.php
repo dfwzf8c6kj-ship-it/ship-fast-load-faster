@@ -23,6 +23,15 @@ class DatabaseSeeder extends Seeder
     private const int REVIEW_COUNT = 80000;
 
     /**
+     * The most recent days of seeded history are compressed into the current
+     * calendar month, so "this month" holds the same share of data on the 1st
+     * as on the 30th.
+     */
+    private const int CURRENT_MONTH_DAYS = 30;
+
+    private int $monthStart;
+
+    /**
      * Seed the application's database.
      */
     public function run(): void
@@ -36,6 +45,7 @@ class DatabaseSeeder extends Seeder
         DB::statement('PRAGMA foreign_keys = OFF');
 
         $now = now()->timestamp;
+        $this->monthStart = now()->startOfMonth()->timestamp;
 
         DB::transaction(function () use ($now): void {
             $this->seedUsers($now);
@@ -327,9 +337,14 @@ class DatabaseSeeder extends Seeder
     private function weightedTimestamp(int $now): string
     {
         $ratio = mt_rand(0, 1000000) / 1000000;
-        $daysAgo = (int) floor($ratio * $ratio * 730);
+        $secondsAgo = (int) floor($ratio * $ratio * 730) * 86400 + mt_rand(0, 86399);
+        $window = self::CURRENT_MONTH_DAYS * 86400;
 
-        return date('Y-m-d H:i:s', $now - ($daysAgo * 86400) - mt_rand(0, 86399));
+        $timestamp = $secondsAgo < $window
+            ? $now - intdiv($secondsAgo * ($now - $this->monthStart), $window)
+            : $this->monthStart - ($secondsAgo - $window);
+
+        return date('Y-m-d H:i:s', $timestamp);
     }
 
     private function money(int $cents): string
